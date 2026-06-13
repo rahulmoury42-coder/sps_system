@@ -6,12 +6,14 @@ import io
 from collections import defaultdict
 from .models import VoucherReference, VoucherBeneficiary, EmailMaster
 
-# Beneficiary ko Reference ke andar Inline (Ek ke niche ek) dikhane ke liye
+# Beneficiary ko Table ke roop mein dikhane ke liye
 class VoucherBeneficiaryInline(admin.TabularInline):
     model = VoucherBeneficiary
-    extra = 1  # Shuruat mein 1 khali dabba dikhega naya add karne ke liye
-    min_num = 1 # Kam se kam 1 beneficiary bharna zaroori hai
-
+    extra = 1  # Shuruat mein 1 khali row dikhega
+    min_num = 1 # Kam se kam 1 beneficiary zaroori hai
+    
+    # Is line se columns ka order set hoga, Budget Head ekdum last mein dikhega
+    fields = ['beneficiary', 'required_amount', 'purpose', 'supporting', 'supporting_pending', 'budget_head']
 
 # 1. Purana Excel Export Button (Naye Structure ke hisab se updated)
 @admin.action(description="Download Selected as Excel")
