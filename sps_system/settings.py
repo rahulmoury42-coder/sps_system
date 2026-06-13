@@ -131,3 +131,4 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'rahulmoury42@gmail.com' # Yahan apni official ID daalein
 EMAIL_HOST_PASSWORD = 'bucxnidqapijttwa' # Yahan 'App Password' daalein (16 characters)
 DEFAULT_FROM_EMAIL = 'rahulmourya@samajpragatisahayog.org'
+EMAIL_FAIL_SILENTLY = True
