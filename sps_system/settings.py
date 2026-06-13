@@ -124,11 +124,5 @@ STORAGES = {
 }
 
 # --- REAL EMAIL SETTINGS ---
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'  # Agar Outlook hai to 'smtp.office365.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'rahulmoury42@gmail.com' # Yahan apni official ID daalein
-EMAIL_HOST_PASSWORD = 'bucxnidqapijttwa' # Yahan 'App Password' daalein (16 characters)
-DEFAULT_FROM_EMAIL = 'rahulmourya@samajpragatisahayog.org'
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 EMAIL_FAIL_SILENTLY = True
