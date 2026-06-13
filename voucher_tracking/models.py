@@ -1,11 +1,11 @@
 from django.db import models
 
 class EmailMaster(models.Model):
-    name = models.CharField(max_length=100, verbose_name="Employee Name")
-    email = models.EmailField(unique=True, verbose_name="Email Address")
+    name = models.CharField(max_length=100, verbose_name="Employee Name", blank=True, null=True)
+    email = models.EmailField(unique=True, verbose_name="Email Address", blank=True, null=True)
 
     def __str__(self):
-        return f"{self.name} ({self.email})"
+        return f"{self.name or 'No Name'} ({self.email or 'No Email'})"
 
 
 # 1. Yeh sirf Reference aur Master jankari save karega (Ek baar bhari jayegi)
