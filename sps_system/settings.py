@@ -129,5 +129,5 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'rahulmoury42@gmail.com'  # Samaj Pragati Sahayog ya aapki Gmail ID
-EMAIL_HOST_PASSWORD = 'bucxnidqapijttwa'  # Bina space ke 16 aksharon ka Google App Password
+EMAIL_HOST_PASSWORD = 'vgbsleyongjpgjjl'  # Bina space ke 16 aksharon ka Google App Password
 EMAIL_FAIL_SILENTLY = True
