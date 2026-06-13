@@ -1,12 +1,19 @@
 from django.contrib import admin
 from django.http import HttpResponse
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMessage, send_mail
 import openpyxl
 import io
 from collections import defaultdict
-from .models import Voucher, EmailMaster
+from .models import VoucherReference, VoucherBeneficiary, EmailMaster
 
-# 1. Purana Excel Export Button
+# Beneficiary ko Reference ke andar Inline (Ek ke niche ek) dikhane ke liye
+class VoucherBeneficiaryInline(admin.TabularInline):
+    model = VoucherBeneficiary
+    extra = 1  # Shuruat mein 1 khali dabba dikhega naya add karne ke liye
+    min_num = 1 # Kam se kam 1 beneficiary bharna zaroori hai
+
+
+# 1. Purana Excel Export Button (Naye Structure ke hisab se updated)
 @admin.action(description="Download Selected as Excel")
 def export_to_excel(modeladmin, request, queryset):
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -22,33 +29,33 @@ def export_to_excel(modeladmin, request, queryset):
     ]
     worksheet.append(headers)
     
-    for voucher in queryset:
-        worksheet.append([
-            voucher.reference_no, str(voucher.payment_date) if voucher.payment_date else '',
-            voucher.bank, voucher.cheque_no, voucher.beneficiary, float(voucher.required_amount),
-            voucher.location, voucher.program, voucher.purpose or '', voucher.project or '',
-            voucher.budget_head or '', str(voucher.approve_date) if voucher.approve_date else '',
-            voucher.supporting or '', voucher.supporting_pending or '', "Yes" if voucher.payment_form_received else "No"
-        ])
+    for ref in queryset:
+        # Har reference ke andar ke saare beneficiaries ko nikal kar row banana
+        for b in ref.beneficiaries.all():
+            worksheet.append([
+                ref.reference_no, str(ref.payment_date) if ref.payment_date else '',
+                ref.bank or '', ref.cheque_no or '', b.beneficiary, float(b.required_amount),
+                ref.location, ref.program, b.purpose or '', ref.project or '',
+                b.budget_head or '', str(ref.approve_date) if ref.approve_date else '',
+                b.supporting or '', b.supporting_pending or '', "Yes" if ref.payment_form_received else "No"
+            ])
     workbook.save(response)
     return response
 
 
-# 2. NAYA FEATURE: MANUALLY SEND REMINDER WITH EXCEL (ONLY FOR PENDING VOUCHERS)
+# 2. Purana Manual Reminder Action (Naye Structure ke hisab se updated)
 @admin.action(description="Send Reminder Email with Excel (Only Pending)")
 def send_voucher_reminder_action(modeladmin, request, queryset):
-    # Sirf wahi vouchers filter karna jo received NAHI hue hain
     pending_vouchers = queryset.filter(payment_form_received=False)
     
     if not pending_vouchers.exists():
         modeladmin.message_user(request, "Error: Selected vouchers mein se koi bhi pending (Not Received) nahi hai!", level='warning')
         return
         
-    # Vouchers ko Email ke hisab se group karna taaki ek vyakti ko ek hi mail jaye
     email_groups = defaultdict(list)
-    for voucher in pending_vouchers:
-        if voucher.to_email:
-            email_groups[voucher.to_email].append(voucher)
+    for ref in pending_vouchers:
+        if ref.to_email:
+            email_groups[ref.to_email].append(ref)
             
     if not email_groups:
         modeladmin.message_user(request, "Error: Selected pending vouchers mein 'To Email' field khali hai!", level='warning')
@@ -56,12 +63,9 @@ def send_voucher_reminder_action(modeladmin, request, queryset):
 
     emails_sent = 0
 
-    # Har unique Email ke liye process chalu
-    for to_email, vouchers in email_groups.items():
-        # CC Emails ikthha karna
-        cc_emails = list(set([v.cc_email for v in vouchers if v.cc_email]))
+    for to_email, refs in email_groups.items():
+        cc_emails = list(set([r.cc_email for r in refs if r.cc_email]))
         
-        # Memory ke andar Excel sheet banana (bina computer mein save kiye direct mail mein bhejne ke liye)
         workbook = openpyxl.Workbook()
         worksheet = workbook.active
         worksheet.title = 'Pending Vouchers'
@@ -72,28 +76,29 @@ def send_voucher_reminder_action(modeladmin, request, queryset):
         ]
         worksheet.append(headers)
         
-        for v in vouchers:
-            worksheet.append([
-                v.reference_no, str(v.payment_date), v.beneficiary, 
-                float(v.required_amount), v.location, v.project or '', 
-                v.budget_head or '', v.supporting_pending or 'Pending'
-            ])
-            
+        for ref in refs:
+            for b in ref.beneficiaries.all():
+                worksheet.append([
+                    ref.reference_no, str(ref.payment_date), b.beneficiary, 
+                    float(b.required_amount), ref.location, ref.project or '', 
+                    b.budget_head or '', b.supporting_pending or 'Pending'
+                ])
+                
         excel_file = io.BytesIO()
         workbook.save(excel_file)
         excel_file.seek(0)
         
-        # Email Content taiyar karna
+        total_beneficiaries = sum([ref.beneficiaries.count() for ref in refs])
         subject = f"SPS Alert: Pending Vouchers Reminder"
         body = (
             f"Namaste,\n\n"
             f"Aapke reference/location se jude pending vouchers ki suchi is email ke saath attach ki gayi hai.\n"
             f"Kripya in vouchers ke pending supporting documents jald se jald jama karein.\n\n"
-            f"• Total Pending Vouchers: {len(vouchers)}\n\n"
+            f"• Total Pending References: {len(refs)}\n"
+            f"• Total Pending Entries: {total_beneficiaries}\n\n"
             f"Dhanyawad,\nSPS Voucher Tracking System"
         )
         
-        # EmailMessage object banana taaki attachment bhej sakein
         email = EmailMessage(
             subject=subject,
             body=body,
@@ -102,7 +107,6 @@ def send_voucher_reminder_action(modeladmin, request, queryset):
             cc=cc_emails
         )
         
-        # Excel file ko attach karna
         email.attach('Pending_Vouchers_Report.xlsx', excel_file.read(), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
         email.send()
         emails_sent += 1
@@ -111,26 +115,20 @@ def send_voucher_reminder_action(modeladmin, request, queryset):
 
 
 # 3. Main Voucher Display Customization
-@admin.register(Voucher)
-class VoucherAdmin(admin.ModelAdmin):
-    # Yeh list table mein column dikhayega
+@admin.register(VoucherReference)
+class VoucherReferenceAdmin(admin.ModelAdmin):
     list_display = (
-        'reference_no', 'payment_date', 'beneficiary', 'required_amount', 
-        'location', 'program', 'project', 'payment_form_received'
+        'reference_no', 'payment_date', 'location', 'program', 'project', 'payment_form_received'
     )
-    
-    # TASK 2: Yeh line Reference No aur Beneficiary ke naam ko Link bana degi jisse click karke Edit kar sakein
-    list_display_links = ('reference_no', 'beneficiary')
-    
-    # TASK 3 (Search): Yahan Name(beneficiary), Location, Program, aur Project se Search hoga
-    search_fields = ('reference_no', 'beneficiary', 'location', 'program', 'project', 'to_email')
-    
-    # TASK 3 (Filter): Yeh side mein ek box banayega jahan se aap easily filter kar payenge
+    list_display_links = ('reference_no',)
+    search_fields = ('reference_no', 'location', 'program', 'project', 'to_email')
     list_filter = ('location', 'program', 'project', 'payment_form_received', 'payment_date')
-    
     actions = [export_to_excel, send_voucher_reminder_action]
+    
+    # Is line se Beneficiary ka form Reference ke andar hi khul jayega
+    inlines = [VoucherBeneficiaryInline]
 
-    # Auto Email logic jaisa tha wese hi hai
+    # Auto Email logic jaisa tha wese hi hai (Bina crash kiye chalega)
     def save_model(self, request, obj, form, change):
         is_new = obj.pk is None
         super().save_model(request, obj, form, change)
@@ -139,9 +137,8 @@ class VoucherAdmin(admin.ModelAdmin):
             recipient_list = [emp.email for emp in EmailMaster.objects.all()]
             if recipient_list:
                 subject = f"[AUTO-ALERT] Naya Voucher Add Hua: Ref-{obj.reference_no}"
-                message = f"SPS System mein naya voucher aaya hai:\nRef: {obj.reference_no}\nAmount: Rs. {obj.required_amount}"
+                message = f"SPS System mein naya voucher aaya hai:\nRef: {obj.reference_no}\nLocation: {obj.location}"
                 
-                from django.core.mail import send_mail
                 send_mail(
                     subject=subject,
                     message=message,
@@ -149,7 +146,9 @@ class VoucherAdmin(admin.ModelAdmin):
                     recipient_list=recipient_list,
                     fail_silently=True
                 )
+
 admin.site.register(EmailMaster)
+
 # --- SVMS BRANDING ---
 admin.site.site_header = "SPS Voucher Management System (SVMS)"
 admin.site.site_title = "SVMS Admin Portal"
