@@ -1,32 +1,24 @@
 from django.db import models
 
-class EmailMaster(models.Model):
-    email = models.EmailField()
-    name = models.CharField(max_length=100, blank=True, null=True)
+# 1. Yeh sirf Reference ki jankari rakhega
+class VoucherReference(models.Model):
+    reference_number = models.CharField(max_length=100, unique=True, verbose_name="Reference Number")
+    payment_date = models.DateField(verbose_name="Payment Date")
+    approve_date = models.DateField(verbose_name="Approve Date")
 
     def __str__(self):
-        return self.email
+        return self.reference_number
 
-class Voucher(models.Model):
-    reference_no = models.CharField(max_length=50, unique=True)
-    payment_date = models.DateField()
-    bank = models.CharField(max_length=100)
-    cheque_no = models.CharField(max_length=50, blank=True, null=True)
-    beneficiary = models.CharField(max_length=200)
-    required_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    location = models.CharField(max_length=100)
-    program = models.CharField(max_length=100)
-    payment_form_received = models.BooleanField(default=False)
-    purpose = models.TextField(blank=True, null=True)
-    project = models.CharField(max_length=100, blank=True, null=True)
-    budget_head = models.CharField(max_length=100, blank=True, null=True)
-    approve_date = models.DateField(blank=True, null=True)
-    supporting = models.CharField(max_length=200, blank=True, null=True)
-    supporting_pending = models.TextField(blank=True, null=True)
+# 2. Yeh har ek Beneficiary ki alag jankari rakhega
+class VoucherBeneficiary(models.Model):
+    # Is line se yeh upar wale Reference se jud jayega
+    voucher_reference = models.ForeignKey(VoucherReference, on_delete=models.CASCADE, related_name='beneficiaries')
     
-    # ---- REMINDER KE LIYE NAYE EMAIL FIELDS ----
-    to_email = models.EmailField(blank=True, null=True, help_text="Jis person ko reminder bhejna hai")
-    cc_email = models.EmailField(blank=True, null=True, help_text="CC mein rakhne ke liye email (Optional)")
+    # Har beneficiary ki apni alag fields
+    beneficiary_name = models.CharField(max_length=255, verbose_name="Beneficiary Name")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Amount")
+    description = models.TextField(verbose_name="Description", blank=True, null=True)
+    # Agar koi aur field bhi dobara bharni ho (jaise Account No), toh wo yahan jod sakte hain
 
     def __str__(self):
-        return f"{self.reference_no} - {self.beneficiary}"
+        return f"{self.beneficiary_name} - {self.amount}"
